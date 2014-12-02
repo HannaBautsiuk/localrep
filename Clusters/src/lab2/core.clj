@@ -52,6 +52,7 @@
 
 (defn find-max [points]
   (->> (sort-by getDst points)
+       (reverse)
        (first)))
 
 (defn revise-potential [point kernel mthd]
@@ -86,11 +87,11 @@
               (>= (+ (/ (calc-min-dist nextKernel kernels mthd) Ra) (/ (:dst nextKernel) (:dst initKernel))) 1) (recur (cons nextKernel kernels) (rest revisedPoints))
               :else (recur kernels (cons (assoc nextKernel :dst 0) (rest revisedPoints))))))))
 
-(defn- getMethod [mthd]
+(defn getMethod [mthd]
   (cond
     (= mthd "hamming") hamming
     (= mthd "euclidian") euclidian
-    :else nil?))
+    :else nil))
 
 (defn- input-params-incorrect[file-name mthd]
   (or
