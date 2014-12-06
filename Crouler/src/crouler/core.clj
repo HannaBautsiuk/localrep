@@ -2,6 +2,8 @@
   (:require [clj-http.client :as client])
   (:require [pl.danieljanus.tagsoup :refer :all]))
 
+(def results (atom '()))
+(def usedLinks (atom '()))
 
 (defn- getAbsLink[link baseLink]
   (cond 
@@ -32,36 +34,45 @@
     :else "unknown error")))
 
 (defn- getResultOfLink[link]
-  (let [
-          http-response (client/get link {:throw-exceptions false})
-          status (getStatusDesc http-response)
-          newLinks (if (nil? status)
+  (let [http-response (client/get link {:throw-exceptions false})
+        status (getStatusDesc http-response)
+        newLinks (if (nil? status)
                      (get-all-links (get http-response :body) link)
-                     '())
-          ]
-    (hash-map :link link :status status :chldLinks newLinks)))
+                      '())
+        rez (hash-map :link link :status status :chldLinks newLinks)
+        ]
+    (swap! results conj rez)
+    (swap! usedLinks conj link)
+    rez
+    ))
 
-(defn- getResult[links depth]
-  (loop [curLinks links
-         curDept 1
-         rez '()]
-    (if (> curDept depth)
-      rez
-      (let [
-          curRez (pmap getResultOfLink curLinks)]
-        (recur (mapcat #(get % :chldLinks) curRez)
-        (+ curDept 1)
-        (into rez curRez))))))
+(defn is-new-link? [target] 
+  (not (some #(= target %) @usedLinks)))
+
+(defn- getNewLinks[node]
+  (->> (:chldLinks node)
+       (filter is-new-link?)))
+
+(defn- getResult[curLinks depth]
+  (let [new-depth (dec depth)]
+    (if (< depth 1)
+      nil
+     (doseq [curRez (pmap getResultOfLink curLinks)] 
+       (getResult (distinct (filter is-new-link? (:chldLinks curRez))) new-depth)))))
 
 (defn- printResult [res]
   (do
-    (print (str (get res :link) " "))
-    (if (nil? (get res :status))
-      (println (str (count (get res :chldLinks)) " " ))
-      (println (str (get res :status) " " )))))
+    (print (str (:link res) " "))
+    (if (nil? (:status res))
+      (println (str (count (:chldLinks res)) " " ))
+      (println (str (:status res ) " " )))))
+
+(defn- printAllResult []
+  (dorun (map printResult @results)))
 
 (defn- process[links depth]
-    (dorun (map printResult (getResult links depth))))
+    (getResult links depth)
+    (printAllResult))
 
 (defn- input-params-incorrect[file-name depth]
   (or
